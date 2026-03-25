@@ -1,0 +1,392 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #000;
+    color: #00ffaa;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+}
+
+.screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    background: #000;
+}
+
+.screen.active {
+    display: flex;
+}
+
+/* Main Menu */
+.menu-container {
+    text-align: center;
+    max-width: 500px;
+    padding: 40px;
+}
+
+.game-title {
+    font-size: 72px;
+    color: #ff3344;
+    text-shadow: 0 0 20px #ff3344, 0 0 40px #ff0022, 0 0 80px #990011;
+    letter-spacing: 12px;
+    margin-bottom: 10px;
+    animation: titlePulse 2s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+    0%, 100% { text-shadow: 0 0 20px #ff3344, 0 0 40px #ff0022, 0 0 80px #990011; }
+    50% { text-shadow: 0 0 30px #ff5566, 0 0 60px #ff3344, 0 0 100px #cc0022; }
+}
+
+.tagline {
+    font-size: 14px;
+    color: #668;
+    margin-bottom: 40px;
+    letter-spacing: 2px;
+}
+
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+}
+
+.menu-btn {
+    background: transparent;
+    border: 2px solid #00ffaa;
+    color: #00ffaa;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    padding: 12px 40px;
+    cursor: pointer;
+    letter-spacing: 4px;
+    transition: all 0.15s;
+    width: 260px;
+}
+
+.menu-btn:hover {
+    background: #00ffaa;
+    color: #000;
+    box-shadow: 0 0 20px #00ffaa44;
+}
+
+.version {
+    margin-top: 40px;
+    font-size: 11px;
+    color: #334;
+}
+
+/* Controls */
+.controls-list {
+    margin: 30px 0;
+    text-align: left;
+}
+
+.control-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #112;
+    font-size: 14px;
+}
+
+.control-row span:first-child {
+    color: #668;
+}
+
+.control-row span:last-child {
+    color: #00ffaa;
+}
+
+/* Scores */
+.scores-list {
+    margin: 20px 0;
+    text-align: left;
+    min-height: 200px;
+}
+
+.score-entry {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 14px;
+    border-bottom: 1px solid #112;
+}
+
+/* Intro */
+.intro-container {
+    text-align: center;
+    max-width: 600px;
+    padding: 40px;
+}
+
+.intro-text {
+    font-size: 16px;
+    color: #88aacc;
+    line-height: 1.8;
+    margin-bottom: 40px;
+}
+
+.intro-prompt {
+    color: #00ffaa;
+    font-size: 14px;
+    letter-spacing: 4px;
+    animation: blink 1.2s ease-in-out infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* Game Container */
+#game-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+}
+
+#game-container.active {
+    display: block;
+}
+
+#game-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* HUD */
+#hud {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+#hud-left {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+}
+
+#hud-right {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    text-align: right;
+}
+
+#hud-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+#hud-bottom {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.hud-item {
+    margin-bottom: 8px;
+}
+
+.hud-label {
+    font-size: 10px;
+    color: #446;
+    letter-spacing: 2px;
+    display: block;
+}
+
+.hud-value {
+    font-size: 24px;
+    color: #00ffaa;
+    text-shadow: 0 0 10px #00ffaa44;
+}
+
+.hud-bar-container {
+    width: 180px;
+    height: 8px;
+    background: #112;
+    margin: 4px 0;
+    border: 1px solid #223;
+}
+
+.hud-bar {
+    height: 100%;
+    transition: width 0.2s;
+}
+
+.health-bar {
+    background: #00ffaa;
+    box-shadow: 0 0 8px #00ffaa44;
+    width: 100%;
+}
+
+.health-bar.low {
+    background: #ff3344;
+    box-shadow: 0 0 8px #ff334444;
+    animation: healthPulse 0.5s ease-in-out infinite;
+}
+
+@keyframes healthPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Crosshair */
+#crosshair {
+    font-size: 24px;
+    color: #ffffff88;
+    text-shadow: 0 0 4px #fff;
+    user-select: none;
+    text-align: center;
+}
+
+/* Hit Marker */
+.hit-marker {
+    font-size: 16px;
+    color: #ff3344;
+    opacity: 0;
+    transition: opacity 0.1s;
+    text-align: center;
+    pointer-events: none;
+    text-shadow: 0 0 6px #ff3344;
+}
+
+.hit-marker.show {
+    opacity: 1;
+}
+
+/* Damage Flash */
+#damage-flash {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(ellipse at center, transparent 40%, #ff000033 100%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 5;
+}
+
+#damage-flash.show {
+    opacity: 1;
+}
+
+/* Weapon Slots */
+#weapon-slots {
+    display: flex;
+    gap: 10px;
+}
+
+.weapon-slot {
+    font-size: 11px;
+    color: #446;
+    padding: 4px 10px;
+    border: 1px solid #223;
+    letter-spacing: 1px;
+}
+
+.weapon-slot.active {
+    color: #00ffaa;
+    border-color: #00ffaa;
+    box-shadow: 0 0 8px #00ffaa22;
+}
+
+/* Combo Display */
+#combo-display {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 28px;
+    color: #ffaa00;
+    text-shadow: 0 0 15px #ffaa0066;
+    opacity: 0;
+    transition: opacity 0.3s;
+    letter-spacing: 4px;
+}
+
+#combo-display.show {
+    opacity: 1;
+}
+
+/* Message Display */
+#message-display {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 20px;
+    color: #00ffaa;
+    text-shadow: 0 0 15px #00ffaa66;
+    opacity: 0;
+    transition: opacity 0.5s;
+    letter-spacing: 4px;
+    white-space: nowrap;
+}
+
+#message-display.show {
+    opacity: 1;
+}
+
+/* Game Over */
+.score-summary {
+    margin: 30px 0;
+    text-align: left;
+}
+
+.score-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #112;
+    font-size: 16px;
+}
+
+.score-row span:first-child {
+    color: #668;
+}
+
+.score-row span:last-child {
+    color: #ffaa00;
+    text-shadow: 0 0 8px #ffaa0044;
+}
+
+#gameover-title {
+    font-size: 36px;
+    margin-bottom: 10px;
+}
+
+#gameover-text {
+    color: #668;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
