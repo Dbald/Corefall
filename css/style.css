@@ -173,6 +173,20 @@ body {
     display: block;
 }
 
+/* Minimap */
+#minimap {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    width: 180px;
+    height: 180px;
+    z-index: 15;
+    pointer-events: none;
+    border: 1px solid #00ffaa44;
+    background: #00000099;
+    border-radius: 4px;
+}
+
 /* HUD */
 #hud {
     position: fixed;

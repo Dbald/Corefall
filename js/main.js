@@ -573,6 +573,132 @@ function showMessage(text, duration = 1000) {
     }, duration);
 }
 
+// =========== MINIMAP ===========
+const minimapCanvas = document.getElementById('minimap');
+const minimapCtx = minimapCanvas.getContext('2d');
+const MINIMAP_SIZE = 180;
+const MINIMAP_SCALE = 2.2; // pixels per world unit
+
+function drawMinimap() {
+    const ctx = minimapCtx;
+    const level = LEVELS[state.currentLevel];
+    if (!level) return;
+
+    ctx.clearRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+
+    // Center map on player
+    const px = camera.position.x;
+    const pz = camera.position.z;
+    const cx = MINIMAP_SIZE / 2;
+    const cy = MINIMAP_SIZE / 2;
+
+    function toMapX(worldX) { return cx + (worldX - px) * MINIMAP_SCALE; }
+    function toMapY(worldZ) { return cy + (worldZ - pz) * MINIMAP_SCALE; }
+
+    // Draw corridors
+    ctx.fillStyle = '#1a2a1a';
+    level.corridors.forEach(corr => {
+        const fromRoom = level.rooms[corr.from];
+        const toRoom = level.rooms[corr.to];
+        const dx = toRoom.x - fromRoom.x;
+        const dz = toRoom.z - fromRoom.z;
+        const w = corr.width * MINIMAP_SCALE;
+
+        if (Math.abs(dx) < 1) {
+            // Vertical corridor
+            const edgeFrom = dz < 0 ? fromRoom.z - fromRoom.h / 2 : fromRoom.z + fromRoom.h / 2;
+            const edgeTo = dz < 0 ? toRoom.z + toRoom.h / 2 : toRoom.z - toRoom.h / 2;
+            const minZ = Math.min(edgeFrom, edgeTo);
+            const maxZ = Math.max(edgeFrom, edgeTo);
+            ctx.fillRect(
+                toMapX(fromRoom.x) - w / 2, toMapY(minZ),
+                w, (maxZ - minZ) * MINIMAP_SCALE
+            );
+        } else {
+            // L-shaped: horizontal then vertical
+            const hEdge = dx > 0 ? fromRoom.x + fromRoom.w / 2 : fromRoom.x - fromRoom.w / 2;
+            const hMinX = Math.min(hEdge, toRoom.x);
+            const hMaxX = Math.max(hEdge, toRoom.x);
+            ctx.fillRect(
+                toMapX(hMinX), toMapY(fromRoom.z) - w / 2,
+                (hMaxX - hMinX) * MINIMAP_SCALE, w
+            );
+            const vEdge = dz < 0 ? toRoom.z + toRoom.h / 2 : toRoom.z - toRoom.h / 2;
+            const vMinZ = Math.min(fromRoom.z, vEdge);
+            const vMaxZ = Math.max(fromRoom.z, vEdge);
+            ctx.fillRect(
+                toMapX(toRoom.x) - w / 2, toMapY(vMinZ),
+                w, (vMaxZ - vMinZ) * MINIMAP_SCALE
+            );
+            // Corner
+            ctx.fillRect(
+                toMapX(toRoom.x) - w / 2, toMapY(fromRoom.z) - w / 2,
+                w, w
+            );
+        }
+    });
+
+    // Draw rooms
+    level.rooms.forEach(room => {
+        ctx.fillStyle = '#1a2a1a';
+        ctx.fillRect(
+            toMapX(room.x - room.w / 2), toMapY(room.z - room.h / 2),
+            room.w * MINIMAP_SCALE, room.h * MINIMAP_SCALE
+        );
+        ctx.strokeStyle = '#00ffaa44';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(
+            toMapX(room.x - room.w / 2), toMapY(room.z - room.h / 2),
+            room.w * MINIMAP_SCALE, room.h * MINIMAP_SCALE
+        );
+    });
+
+    // Draw exit
+    if (exitPosition && enemyManager.aliveCount === 0) {
+        ctx.fillStyle = '#00ffaa';
+        ctx.beginPath();
+        ctx.arc(toMapX(exitPosition.x), toMapY(exitPosition.z), 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Draw enemies
+    enemyManager.enemies.forEach(e => {
+        if (!e.alive) return;
+        const ex = toMapX(e.mesh.position.x);
+        const ey = toMapY(e.mesh.position.z);
+        if (ex < -5 || ex > MINIMAP_SIZE + 5 || ey < -5 || ey > MINIMAP_SIZE + 5) return;
+        ctx.fillStyle = e.type === 'boss' ? '#ff0044' : '#ff4444';
+        const sz = e.type === 'boss' ? 4 : 2;
+        ctx.fillRect(ex - sz, ey - sz, sz * 2, sz * 2);
+    });
+
+    // Draw pickups
+    pickupManager.pickups.forEach(p => {
+        if (p.collected) return;
+        const mx = toMapX(p.mesh.position.x);
+        const my = toMapY(p.mesh.position.z);
+        if (mx < -5 || mx > MINIMAP_SIZE + 5 || my < -5 || my > MINIMAP_SIZE + 5) return;
+        ctx.fillStyle = p.type === 'health' ? '#00ff44' :
+                        p.type === 'ammo' ? '#4488ff' :
+                        p.type === 'weapon' ? '#ff44ff' :
+                        '#ffaa00';
+        ctx.fillRect(mx - 1.5, my - 1.5, 3, 3);
+    });
+
+    // Draw player (arrow showing direction)
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-yaw);
+    ctx.fillStyle = '#00ffaa';
+    ctx.beginPath();
+    ctx.moveTo(0, -5);
+    ctx.lineTo(-3, 4);
+    ctx.lineTo(3, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
 // =========== MAIN LOOP ===========
 let lastTime = performance.now();
 
@@ -647,6 +773,7 @@ function gameLoop(time) {
 
     // Update HUD
     updateHUD();
+    drawMinimap();
 
     // Render
     renderer.render(scene, camera);
