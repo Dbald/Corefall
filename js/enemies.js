@@ -235,7 +235,7 @@ export class Enemy {
         this.deathTime = performance.now();
     }
 
-    update(dt, playerPos, scene, projectiles) {
+    update(dt, playerPos, scene, projectiles, wallBoxes) {
         if (!this.alive) {
             // Death animation
             const elapsed = performance.now() - this.deathTime;
@@ -294,7 +294,7 @@ export class Enemy {
         switch (this.def.behavior) {
             case 'melee':
                 if (flatDist > this.def.attackRange) {
-                    this.moveToward(toPlayer, dt, this.def.speed);
+                    this.moveToward(toPlayer, dt, this.def.speed, wallBoxes);
                 } else if (now - this.lastAttackTime > this.def.attackRate) {
                     this.lastAttackTime = now;
                     return { attack: true, damage: this.def.damage, type: 'melee' };
@@ -304,14 +304,14 @@ export class Enemy {
             case 'ranged':
                 // Keep distance, strafe, shoot
                 if (flatDist > this.def.attackRange * 0.8) {
-                    this.moveToward(toPlayer, dt, this.def.speed);
+                    this.moveToward(toPlayer, dt, this.def.speed, wallBoxes);
                 } else if (flatDist < this.def.attackRange * 0.3) {
-                    this.moveToward(toPlayer, dt, -this.def.speed);
+                    this.moveToward(toPlayer, dt, -this.def.speed, wallBoxes);
                 } else {
                     // Strafe
                     const strafe = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
                     const strafeDir = Math.sin(now * 0.001 + this.mesh.id) > 0 ? 1 : -1;
-                    this.moveToward(strafe, dt, this.def.speed * 0.5 * strafeDir);
+                    this.moveToward(strafe, dt, this.def.speed * 0.5 * strafeDir, wallBoxes);
                 }
                 if (now - this.lastAttackTime > this.def.attackRate && flatDist < this.def.attackRange) {
                     this.lastAttackTime = now;
@@ -329,9 +329,9 @@ export class Enemy {
                             this.lastAttackTime = now;
                         }
                     }
-                    this.moveToward(toPlayer, dt, this.def.speed);
+                    this.moveToward(toPlayer, dt, this.def.speed, wallBoxes);
                 } else {
-                    this.moveToward(this.chargeDir, dt, this.def.chargeSpeed);
+                    this.moveToward(this.chargeDir, dt, this.def.chargeSpeed, wallBoxes);
                     if (now - this.stateTimer > 600) {
                         this.state = 'chase';
                     }
@@ -345,11 +345,11 @@ export class Enemy {
             case 'boss':
                 // Multi-attack boss
                 if (flatDist > 8) {
-                    this.moveToward(toPlayer, dt, this.def.speed);
+                    this.moveToward(toPlayer, dt, this.def.speed, wallBoxes);
                 } else {
                     const strafe = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
                     const strafeDir = Math.sin(now * 0.0008) > 0 ? 1 : -1;
-                    this.moveToward(strafe, dt, this.def.speed * strafeDir);
+                    this.moveToward(strafe, dt, this.def.speed * strafeDir, wallBoxes);
                 }
                 if (now - this.lastAttackTime > this.def.attackRate) {
                     this.lastAttackTime = now;
@@ -377,9 +377,26 @@ export class Enemy {
         return true;
     }
 
-    moveToward(dir, dt, speed) {
+    moveToward(dir, dt, speed, wallBoxes) {
         const move = dir.clone().normalize().multiplyScalar(speed * dt);
         this.mesh.position.add(move);
+        // Push out of walls
+        if (wallBoxes) {
+            const pos = this.mesh.position;
+            const radius = this.def.size * 0.5;
+            for (const box of wallBoxes) {
+                const closest = new THREE.Vector3(
+                    Math.max(box.min.x, Math.min(pos.x, box.max.x)),
+                    pos.y,
+                    Math.max(box.min.z, Math.min(pos.z, box.max.z))
+                );
+                const dist = pos.distanceTo(closest);
+                if (dist < radius) {
+                    const pushDir = new THREE.Vector3().subVectors(pos, closest).normalize();
+                    pos.add(pushDir.multiplyScalar(radius - dist));
+                }
+            }
+        }
     }
 
     fireProjectile(scene, direction, projectiles) {
@@ -435,11 +452,11 @@ export class EnemyManager {
         return this.enemies.filter(e => e.alive).length;
     }
 
-    update(dt, playerPos) {
+    update(dt, playerPos, wallBoxes) {
         const attacks = [];
 
         this.enemies = this.enemies.filter(enemy => {
-            const result = enemy.update(dt, playerPos, this.scene, this.projectiles);
+            const result = enemy.update(dt, playerPos, this.scene, this.projectiles, wallBoxes || []);
             if (result && result.attack) {
                 attacks.push(result);
             }
@@ -455,6 +472,21 @@ export class EnemyManager {
                 p.mesh.geometry.dispose();
                 p.mesh.material.dispose();
                 return false;
+            }
+
+            // Check if projectile hit a wall
+            if (wallBoxes) {
+                const pos = p.mesh.position;
+                for (const box of wallBoxes) {
+                    if (pos.x >= box.min.x && pos.x <= box.max.x &&
+                        pos.y >= box.min.y && pos.y <= box.max.y &&
+                        pos.z >= box.min.z && pos.z <= box.max.z) {
+                        this.scene.remove(p.mesh);
+                        p.mesh.geometry.dispose();
+                        p.mesh.material.dispose();
+                        return false;
+                    }
+                }
             }
 
             // Check if projectile hit player

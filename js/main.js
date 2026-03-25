@@ -42,6 +42,7 @@ let pickupManager = new PickupManager(scene);
 
 let levelGroup = null;
 let exitPosition = null;
+let cachedWallBoxes = []; // Pre-computed wall AABBs for fast collision
 let playerVelocity = new THREE.Vector3();
 const GRAVITY = 0;
 const MOVE_SPEED = 8;
@@ -159,7 +160,8 @@ document.getElementById('intro-screen').addEventListener('click', () => {
 });
 
 document.getElementById('transition-screen').addEventListener('click', () => {
-    startLevel(state.currentLevel);
+    if (state.screen !== 'transition') return;
+    startLevel(state.currentLevel + 1);
 });
 
 function showTransition(levelIndex) {
@@ -196,6 +198,15 @@ function startLevel(levelIndex) {
     const result = buildLevel(levelIndex, scene);
     levelGroup = result.group;
     exitPosition = result.exitPosition;
+
+    // Cache wall bounding boxes once for fast collision
+    cachedWallBoxes = [];
+    levelGroup.traverse(child => {
+        if (child.userData && child.userData.isWall) {
+            const box = new THREE.Box3().setFromObject(child);
+            cachedWallBoxes.push(box);
+        }
+    });
 
     // Spawn enemies
     const level = LEVELS[levelIndex];
@@ -310,23 +321,42 @@ canvas.addEventListener('click', () => {
 
 // =========== COLLISION DETECTION ===========
 function checkWallCollision(position, radius) {
-    const walls = [];
-    if (levelGroup) {
-        levelGroup.traverse(child => {
-            if (child.userData && child.userData.isWall) {
-                walls.push(child);
-            }
-        });
-    }
-
-    for (const wall of walls) {
-        const box = new THREE.Box3().setFromObject(wall);
+    for (const box of cachedWallBoxes) {
         const closest = new THREE.Vector3(
             Math.max(box.min.x, Math.min(position.x, box.max.x)),
             position.y,
             Math.max(box.min.z, Math.min(position.z, box.max.z))
         );
 
+        const dist = position.distanceTo(closest);
+        if (dist < radius) {
+            const pushDir = new THREE.Vector3().subVectors(position, closest).normalize();
+            position.add(pushDir.multiplyScalar(radius - dist));
+        }
+    }
+}
+
+// Check if a line segment hits any wall, returns true if blocked
+function lineHitsWall(from, to) {
+    const dir = new THREE.Vector3().subVectors(to, from);
+    const len = dir.length();
+    dir.normalize();
+    const ray = new THREE.Raycaster(from, dir, 0, len);
+    // Quick AABB check along the ray
+    for (const box of cachedWallBoxes) {
+        if (ray.ray.intersectsBox(box)) return true;
+    }
+    return false;
+}
+
+// Push a position out of walls (for enemies)
+function pushOutOfWalls(position, radius) {
+    for (const box of cachedWallBoxes) {
+        const closest = new THREE.Vector3(
+            Math.max(box.min.x, Math.min(position.x, box.max.x)),
+            position.y,
+            Math.max(box.min.z, Math.min(position.z, box.max.z))
+        );
         const dist = position.distanceTo(closest);
         if (dist < radius) {
             const pushDir = new THREE.Vector3().subVectors(position, closest).normalize();
@@ -747,7 +777,7 @@ function gameLoop(time) {
     weapons.update(scene);
 
     // Update enemies
-    const attacks = enemyManager.update(dt, camera.position);
+    const attacks = enemyManager.update(dt, camera.position, cachedWallBoxes);
     if (attacks.length > 0) {
         handleDamage(attacks);
     }
