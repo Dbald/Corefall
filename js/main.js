@@ -249,10 +249,16 @@ function clearScene() {
     pickupManager = new PickupManager(scene);
     levelGroup = null;
 
-    // Add player light
-    const playerLight = new THREE.PointLight(0x4488ff, 0.6, 12);
+    // Player-attached light — bright enough to always see surroundings
+    const playerLight = new THREE.PointLight(0xccddff, 1.5, 25);
     playerLight.position.set(0, 0, 0);
     camera.add(playerLight);
+    // Forward-facing spotlight for extra visibility
+    const flashlight = new THREE.SpotLight(0xffffff, 1.0, 40, Math.PI / 4, 0.5);
+    flashlight.position.set(0, 0, 0);
+    flashlight.target.position.set(0, 0, -1);
+    camera.add(flashlight);
+    camera.add(flashlight.target);
     scene.add(camera);
 }
 

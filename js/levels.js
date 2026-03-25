@@ -398,6 +398,96 @@ export const LEVEL_TRANSITIONS = [
 export const VICTORY_TEXT = 'The engine is destroyed. Vanta-9 begins to collapse.\n\nYou did it, Rook-7. The system is safe.\n\nFor now.';
 export const DEFEAT_TEXT = 'Signal lost. Operative down.\n\nThe engine continues to feed.';
 
+// Compute which openings each room needs based on corridor connections
+function computeOpenings(level) {
+    // For each room, store openings: { side: 'north'|'south'|'east'|'west', center, width }
+    const openings = level.rooms.map(() => []);
+
+    level.corridors.forEach(corr => {
+        const fromRoom = level.rooms[corr.from];
+        const toRoom = level.rooms[corr.to];
+        const w = corr.width;
+
+        const dx = toRoom.x - fromRoom.x;
+        const dz = toRoom.z - fromRoom.z;
+
+        if (Math.abs(dx) < 1) {
+            // Vertical corridor (rooms aligned on x)
+            if (dz < 0) {
+                // toRoom is north of fromRoom
+                openings[corr.from].push({ side: 'north', center: fromRoom.x, width: w });
+                openings[corr.to].push({ side: 'south', center: toRoom.x, width: w });
+            } else {
+                openings[corr.from].push({ side: 'south', center: fromRoom.x, width: w });
+                openings[corr.to].push({ side: 'north', center: toRoom.x, width: w });
+            }
+        } else {
+            // L-shaped: horizontal from 'from' room, vertical into 'to' room
+            // From room: opening on east or west side
+            if (dx > 0) {
+                openings[corr.from].push({ side: 'east', center: fromRoom.z, width: w });
+            } else {
+                openings[corr.from].push({ side: 'west', center: fromRoom.z, width: w });
+            }
+            // To room: opening on south or north side
+            if (dz < 0) {
+                // 'to' is north, corridor enters from south
+                openings[corr.to].push({ side: 'south', center: toRoom.x, width: w });
+            } else if (dz > 0) {
+                openings[corr.to].push({ side: 'north', center: toRoom.x, width: w });
+            } else {
+                // Same z — opening on west or east
+                if (dx > 0) {
+                    openings[corr.to].push({ side: 'west', center: toRoom.z, width: w });
+                } else {
+                    openings[corr.to].push({ side: 'east', center: toRoom.z, width: w });
+                }
+            }
+        }
+    });
+
+    return openings;
+}
+
+// Build a wall with gaps for openings
+// wallStart/wallEnd: the extent of the wall along its length axis
+// wallFixedPos: the fixed coordinate (x for ns walls, z for ew walls)
+// openings: array of { center, width } along the length axis
+// orientation: 'ns' (wall runs along x) or 'ew' (wall runs along z)
+function buildWallWithGaps(group, material, wallFixedPos, wallStart, wallEnd, wallHeight, wallThickness, orientation, openingsOnWall) {
+    // Sort openings by center position
+    const sorted = openingsOnWall.slice().sort((a, b) => a.center - b.center);
+
+    // Build solid segments between gaps
+    let cursor = wallStart;
+    for (const opening of sorted) {
+        const gapStart = opening.center - opening.width / 2;
+        const gapEnd = opening.center + opening.width / 2;
+
+        if (gapStart > cursor + 0.1) {
+            const segLen = gapStart - cursor;
+            const segCenter = (cursor + gapStart) / 2;
+            if (orientation === 'ns') {
+                addWall(group, material, segCenter, wallFixedPos, segLen, wallHeight, wallThickness);
+            } else {
+                addWall(group, material, wallFixedPos, segCenter, wallThickness, wallHeight, segLen);
+            }
+        }
+        cursor = gapEnd;
+    }
+
+    // Final segment after last opening
+    if (cursor < wallEnd - 0.1) {
+        const segLen = wallEnd - cursor;
+        const segCenter = (cursor + wallEnd) / 2;
+        if (orientation === 'ns') {
+            addWall(group, material, segCenter, wallFixedPos, segLen, wallHeight, wallThickness);
+        } else {
+            addWall(group, material, wallFixedPos, segCenter, wallThickness, wallHeight, segLen);
+        }
+    }
+}
+
 export function buildLevel(levelIndex, scene) {
     const level = LEVELS[levelIndex];
     const group = new THREE.Group();
@@ -412,8 +502,11 @@ export function buildLevel(levelIndex, scene) {
     let playerStart = new THREE.Vector3(0, 1.5, 0);
     let exitPosition = null;
 
+    // Compute corridor openings for each room
+    const roomOpenings = computeOpenings(level);
+
     // Build rooms
-    level.rooms.forEach(room => {
+    level.rooms.forEach((room, roomIndex) => {
         // Floor
         const floor = new THREE.Mesh(
             new THREE.BoxGeometry(room.w, 0.2, room.h),
@@ -431,23 +524,53 @@ export function buildLevel(levelIndex, scene) {
         ceil.position.set(room.x, wallHeight, room.z);
         group.add(ceil);
 
-        // Walls
         const halfW = room.w / 2;
         const halfH = room.h / 2;
+        const openings = roomOpenings[roomIndex];
 
-        // North wall
-        addWall(group, wallMat, room.x, room.z - halfH, room.w, wallHeight, wallThickness, 'ns');
-        // South wall
-        addWall(group, wallMat, room.x, room.z + halfH, room.w, wallHeight, wallThickness, 'ns');
-        // East wall
-        addWall(group, wallMat, room.x + halfW, room.z, wallThickness, wallHeight, room.h, 'ew');
-        // West wall
-        addWall(group, wallMat, room.x - halfW, room.z, wallThickness, wallHeight, room.h, 'ew');
+        // North wall (z - halfH), runs along x-axis
+        const northOpenings = openings.filter(o => o.side === 'north');
+        buildWallWithGaps(group, wallMat, room.z - halfH,
+            room.x - halfW, room.x + halfW,
+            wallHeight, wallThickness, 'ns', northOpenings);
 
-        // Room lighting
-        const roomLight = new THREE.PointLight(level.wallColor, 0.8, room.w * 1.5);
+        // South wall (z + halfH), runs along x-axis
+        const southOpenings = openings.filter(o => o.side === 'south');
+        buildWallWithGaps(group, wallMat, room.z + halfH,
+            room.x - halfW, room.x + halfW,
+            wallHeight, wallThickness, 'ns', southOpenings);
+
+        // East wall (x + halfW), runs along z-axis
+        const eastOpenings = openings.filter(o => o.side === 'east');
+        buildWallWithGaps(group, wallMat, room.x + halfW,
+            room.z - halfH, room.z + halfH,
+            wallHeight, wallThickness, 'ew', eastOpenings);
+
+        // West wall (x - halfW), runs along z-axis
+        const westOpenings = openings.filter(o => o.side === 'west');
+        buildWallWithGaps(group, wallMat, room.x - halfW,
+            room.z - halfH, room.z + halfH,
+            wallHeight, wallThickness, 'ew', westOpenings);
+
+        // Room lighting — brighter and more of it
+        const roomLight = new THREE.PointLight(0xffeedd, 1.5, room.w * 2.5);
         roomLight.position.set(room.x, wallHeight - 0.5, room.z);
         group.add(roomLight);
+
+        // Extra fill lights in larger rooms
+        if (room.w > 12 || room.h > 12) {
+            const fl1 = new THREE.PointLight(0xffeedd, 0.8, room.w * 1.5);
+            fl1.position.set(room.x - room.w * 0.25, 2, room.z - room.h * 0.25);
+            group.add(fl1);
+            const fl2 = new THREE.PointLight(0xffeedd, 0.8, room.w * 1.5);
+            fl2.position.set(room.x + room.w * 0.25, 2, room.z + room.h * 0.25);
+            group.add(fl2);
+        }
+
+        // Accent lights with level color
+        const accentLight = new THREE.PointLight(level.wallColor, 1.0, room.w * 2);
+        accentLight.position.set(room.x, 1, room.z);
+        group.add(accentLight);
 
         if (room.isStart) {
             playerStart = new THREE.Vector3(room.x, 1.5, room.z + room.h / 2 - 2);
@@ -455,11 +578,9 @@ export function buildLevel(levelIndex, scene) {
 
         if (room.isExit) {
             exitPosition = new THREE.Vector3(room.x, 0, room.z - room.h / 2 + 1);
-            // Exit marker
-            const exitLight = new THREE.PointLight(0x00ffaa, 2, 6);
+            const exitLight = new THREE.PointLight(0x00ffaa, 3, 8);
             exitLight.position.set(room.x, 1, room.z - room.h / 2 + 1);
             group.add(exitLight);
-            // Exit pad
             const exitPad = new THREE.Mesh(
                 new THREE.CylinderGeometry(1.5, 1.5, 0.1, 16),
                 new THREE.MeshBasicMaterial({ color: 0x00ffaa, transparent: true, opacity: 0.5 })
@@ -470,11 +591,12 @@ export function buildLevel(levelIndex, scene) {
         }
 
         if (room.isBossRoom) {
-            // Add dramatic lighting
-            const bossLight = new THREE.PointLight(0xff0044, 2, 30);
+            const bossLight = new THREE.PointLight(0xff0044, 3, 35);
             bossLight.position.set(room.x, wallHeight - 1, room.z);
             group.add(bossLight);
-            // Pulsing core in center of room
+            const bossLight2 = new THREE.PointLight(0xff4400, 2, 25);
+            bossLight2.position.set(room.x, 1, room.z);
+            group.add(bossLight2);
             const coreSphere = new THREE.Mesh(
                 new THREE.SphereGeometry(2, 16, 16),
                 new THREE.MeshBasicMaterial({
@@ -502,12 +624,13 @@ export function buildLevel(levelIndex, scene) {
         const dz = tz - fz;
 
         if (Math.abs(dx) < 1) {
-            // Vertical corridor
-            const minZ = Math.min(fz + (dz > 0 ? fromRoom.h / 2 : -fromRoom.h / 2),
-                                  tz + (dz < 0 ? toRoom.h / 2 : -toRoom.h / 2));
-            const maxZ = Math.max(fz + (dz > 0 ? fromRoom.h / 2 : -fromRoom.h / 2),
-                                  tz + (dz < 0 ? toRoom.h / 2 : -toRoom.h / 2));
+            // Vertical corridor (rooms share x)
+            const edgeFrom = dz < 0 ? fz - fromRoom.h / 2 : fz + fromRoom.h / 2;
+            const edgeTo = dz < 0 ? tz + toRoom.h / 2 : tz - toRoom.h / 2;
+            const minZ = Math.min(edgeFrom, edgeTo);
+            const maxZ = Math.max(edgeFrom, edgeTo);
             const len = maxZ - minZ;
+            if (len < 0.1) return;
             const midZ = (minZ + maxZ) / 2;
 
             // Floor
@@ -527,89 +650,104 @@ export function buildLevel(levelIndex, scene) {
             group.add(ceil);
 
             // Side walls
-            addWall(group, wallMat, fx - corr.width / 2, midZ, wallThickness, wallHeight, len, 'ew');
-            addWall(group, wallMat, fx + corr.width / 2, midZ, wallThickness, wallHeight, len, 'ew');
+            addWall(group, wallMat, fx - corr.width / 2, midZ, wallThickness, wallHeight, len);
+            addWall(group, wallMat, fx + corr.width / 2, midZ, wallThickness, wallHeight, len);
 
             // Corridor light
-            const cLight = new THREE.PointLight(level.wallColor, 0.4, corr.width * 3);
+            const cLight = new THREE.PointLight(0xffeedd, 0.8, corr.width * 4);
             cLight.position.set(fx, wallHeight - 0.5, midZ);
             group.add(cLight);
         } else {
-            // L-shaped corridor: go horizontal first, then vertical
-            const midX = tx;
-            const midZ = fz;
+            // L-shaped corridor
+            // Horizontal segment from 'from' room edge to tx
+            const hEdge = dx > 0 ? fx + fromRoom.w / 2 : fx - fromRoom.w / 2;
+            const hMinX = Math.min(hEdge, tx);
+            const hMaxX = Math.max(hEdge, tx);
+            const hLen = hMaxX - hMinX;
+            const hMidX = (hMinX + hMaxX) / 2;
 
-            // Horizontal segment
-            const hLen = Math.abs(dx);
-            const hMidX = (fx + tx) / 2;
-            const hFloor = new THREE.Mesh(
-                new THREE.BoxGeometry(hLen, 0.2, corr.width),
-                floorMat
-            );
-            hFloor.position.set(hMidX, -0.1, fz);
-            group.add(hFloor);
+            if (hLen > 0.1) {
+                const hFloor = new THREE.Mesh(
+                    new THREE.BoxGeometry(hLen, 0.2, corr.width), floorMat
+                );
+                hFloor.position.set(hMidX, -0.1, fz);
+                group.add(hFloor);
 
-            const hCeil = new THREE.Mesh(
-                new THREE.BoxGeometry(hLen, 0.2, corr.width),
-                ceilMat
-            );
-            hCeil.position.set(hMidX, wallHeight, fz);
-            group.add(hCeil);
+                const hCeil = new THREE.Mesh(
+                    new THREE.BoxGeometry(hLen, 0.2, corr.width), ceilMat
+                );
+                hCeil.position.set(hMidX, wallHeight, fz);
+                group.add(hCeil);
 
-            addWall(group, wallMat, hMidX, fz - corr.width / 2, hLen, wallHeight, wallThickness, 'ns');
-            addWall(group, wallMat, hMidX, fz + corr.width / 2, hLen, wallHeight, wallThickness, 'ns');
+                addWall(group, wallMat, hMidX, fz - corr.width / 2, hLen, wallHeight, wallThickness);
+                addWall(group, wallMat, hMidX, fz + corr.width / 2, hLen, wallHeight, wallThickness);
 
-            // Vertical segment
-            const vLen = Math.abs(dz);
-            const vMidZ = (fz + tz) / 2;
-            const vFloor = new THREE.Mesh(
-                new THREE.BoxGeometry(corr.width, 0.2, vLen),
-                floorMat
-            );
-            vFloor.position.set(tx, -0.1, vMidZ);
-            group.add(vFloor);
+                const hLight = new THREE.PointLight(0xffeedd, 0.6, corr.width * 4);
+                hLight.position.set(hMidX, wallHeight - 0.5, fz);
+                group.add(hLight);
+            }
 
-            const vCeil = new THREE.Mesh(
-                new THREE.BoxGeometry(corr.width, 0.2, vLen),
-                ceilMat
-            );
-            vCeil.position.set(tx, wallHeight, vMidZ);
-            group.add(vCeil);
+            // Vertical segment from fz to 'to' room edge
+            const vEdge = dz < 0 ? tz + toRoom.h / 2 : tz - toRoom.h / 2;
+            const vMinZ = Math.min(fz, vEdge);
+            const vMaxZ = Math.max(fz, vEdge);
+            const vLen = vMaxZ - vMinZ;
+            const vMidZ = (vMinZ + vMaxZ) / 2;
 
-            addWall(group, wallMat, tx - corr.width / 2, vMidZ, wallThickness, wallHeight, vLen, 'ew');
-            addWall(group, wallMat, tx + corr.width / 2, vMidZ, wallThickness, wallHeight, vLen, 'ew');
+            if (vLen > 0.1) {
+                const vFloor = new THREE.Mesh(
+                    new THREE.BoxGeometry(corr.width, 0.2, vLen), floorMat
+                );
+                vFloor.position.set(tx, -0.1, vMidZ);
+                group.add(vFloor);
 
-            // Corner floor
+                const vCeil = new THREE.Mesh(
+                    new THREE.BoxGeometry(corr.width, 0.2, vLen), ceilMat
+                );
+                vCeil.position.set(tx, wallHeight, vMidZ);
+                group.add(vCeil);
+
+                addWall(group, wallMat, tx - corr.width / 2, vMidZ, wallThickness, wallHeight, vLen);
+                addWall(group, wallMat, tx + corr.width / 2, vMidZ, wallThickness, wallHeight, vLen);
+
+                const vLight = new THREE.PointLight(0xffeedd, 0.6, corr.width * 4);
+                vLight.position.set(tx, wallHeight - 0.5, vMidZ);
+                group.add(vLight);
+            }
+
+            // Corner piece
             const cornerFloor = new THREE.Mesh(
-                new THREE.BoxGeometry(corr.width, 0.2, corr.width),
-                floorMat
+                new THREE.BoxGeometry(corr.width, 0.2, corr.width), floorMat
             );
-            cornerFloor.position.set(midX, -0.1, midZ);
+            cornerFloor.position.set(tx, -0.1, fz);
             group.add(cornerFloor);
 
             const cornerCeil = new THREE.Mesh(
-                new THREE.BoxGeometry(corr.width, 0.2, corr.width),
-                ceilMat
+                new THREE.BoxGeometry(corr.width, 0.2, corr.width), ceilMat
             );
-            cornerCeil.position.set(midX, wallHeight, midZ);
+            cornerCeil.position.set(tx, wallHeight, fz);
             group.add(cornerCeil);
         }
     });
 
     scene.add(group);
 
-    // Set fog
-    scene.fog = new THREE.FogExp2(level.fogColor, level.fogDensity);
+    // Set fog — reduced density for better visibility
+    scene.fog = new THREE.FogExp2(level.fogColor, level.fogDensity * 0.6);
     scene.background = new THREE.Color(level.fogColor);
 
-    // Ambient light
-    const ambient = new THREE.AmbientLight(level.ambientColor, 0.6);
+    // Stronger ambient light so nothing is pitch black
+    const ambient = new THREE.AmbientLight(0xffffff, 0.35);
     scene.add(ambient);
+
+    // Additional hemisphere light for natural fill
+    const hemi = new THREE.HemisphereLight(0xaabbcc, level.floorColor, 0.4);
+    scene.add(hemi);
 
     return { group, playerStart, exitPosition, levelData: level };
 }
 
-function addWall(group, material, x, z, w, h, d, orientation) {
+function addWall(group, material, x, z, w, h, d) {
     const wall = new THREE.Mesh(
         new THREE.BoxGeometry(w, h, d),
         material
