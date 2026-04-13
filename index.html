@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COREFALL</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Main Menu -->
+    <div id="menu-screen" class="screen active">
+        <div class="menu-container">
+            <h1 class="game-title">COREFALL</h1>
+            <p class="tagline">Fight through a dying world and destroy the engine at its core.</p>
+            <div class="menu-buttons">
+                <button id="btn-play" class="menu-btn">PLAY</button>
+                <button id="btn-controls" class="menu-btn">CONTROLS</button>
+                <button id="btn-scores" class="menu-btn">HIGH SCORES</button>
+            </div>
+            <div class="version">v1.0</div>
+        </div>
+    </div>
+
+    <!-- Controls Screen -->
+    <div id="controls-screen" class="screen">
+        <div class="menu-container">
+            <h2>CONTROLS</h2>
+            <div class="controls-list">
+                <div class="control-row"><span>MOVE</span><span>W A S D</span></div>
+                <div class="control-row"><span>LOOK</span><span>MOUSE</span></div>
+                <div class="control-row"><span>SHOOT</span><span>LEFT CLICK</span></div>
+                <div class="control-row"><span>SPRINT</span><span>SHIFT</span></div>
+                <div class="control-row"><span>SWITCH WEAPON</span><span>1 2 3 / SCROLL</span></div>
+            </div>
+            <button id="btn-back-controls" class="menu-btn">BACK</button>
+        </div>
+    </div>
+
+    <!-- High Scores Screen -->
+    <div id="scores-screen" class="screen">
+        <div class="menu-container">
+            <h2>HIGH SCORES</h2>
+            <div id="scores-list" class="scores-list"></div>
+            <button id="btn-back-scores" class="menu-btn">BACK</button>
+        </div>
+    </div>
+
+    <!-- Intro Screen -->
+    <div id="intro-screen" class="screen">
+        <div class="intro-container">
+            <p class="intro-text" id="intro-text"></p>
+            <p class="intro-prompt">CLICK TO BEGIN DESCENT</p>
+        </div>
+    </div>
+
+    <!-- Level Transition -->
+    <div id="transition-screen" class="screen">
+        <div class="intro-container">
+            <h2 id="transition-title"></h2>
+            <p id="transition-text" class="intro-text"></p>
+            <p class="intro-prompt">CLICK TO CONTINUE</p>
+        </div>
+    </div>
+
+    <!-- Game Canvas Container -->
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+
+        <!-- Minimap -->
+        <canvas id="minimap" width="180" height="180"></canvas>
+
+        <!-- HUD -->
+        <div id="hud">
+            <div id="hud-left">
+                <div class="hud-item">
+                    <span class="hud-label">HEALTH</span>
+                    <div class="hud-bar-container">
+                        <div id="health-bar" class="hud-bar health-bar"></div>
+                    </div>
+                    <span id="health-text" class="hud-value">100</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">AMMO</span>
+                    <span id="ammo-text" class="hud-value">--</span>
+                </div>
+            </div>
+            <div id="hud-center">
+                <div id="crosshair">+</div>
+                <div id="damage-flash"></div>
+                <div id="hit-marker" class="hit-marker">X</div>
+            </div>
+            <div id="hud-right">
+                <div class="hud-item">
+                    <span class="hud-label">SCORE</span>
+                    <span id="score-text" class="hud-value">0</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">SECTOR</span>
+                    <span id="sector-text" class="hud-value">1</span>
+                </div>
+            </div>
+            <div id="hud-bottom">
+                <div id="weapon-slots">
+                    <div class="weapon-slot" data-slot="0">1: BLASTER</div>
+                    <div class="weapon-slot" data-slot="1">2: SCATTER</div>
+                    <div class="weapon-slot" data-slot="2">3: PULSE</div>
+                </div>
+            </div>
+            <div id="combo-display"></div>
+            <div id="message-display"></div>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameover-screen" class="screen">
+        <div class="menu-container">
+            <h2 id="gameover-title">MISSION FAILED</h2>
+            <p id="gameover-text"></p>
+            <div class="score-summary">
+                <div class="score-row"><span>FINAL SCORE</span><span id="final-score">0</span></div>
+                <div class="score-row"><span>ENEMIES KILLED</span><span id="final-kills">0</span></div>
+                <div class="score-row"><span>SECTORS CLEARED</span><span id="final-sectors">0</span></div>
+                <div class="score-row"><span>BEST SCORE</span><span id="best-score">0</span></div>
+            </div>
+            <div class="menu-buttons">
+                <button id="btn-restart" class="menu-btn">TRY AGAIN</button>
+                <button id="btn-menu" class="menu-btn">MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        }
+    }
+    </script>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
